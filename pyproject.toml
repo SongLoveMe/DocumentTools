@@ -1,0 +1,10 @@
+[project]
+name = "documenttools"
+version = "0.1.0"
+description = "Local Windows document conversion and PDF utilities."
+requires-python = ">=3.13"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+

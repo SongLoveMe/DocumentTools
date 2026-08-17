@@ -1,0 +1,9 @@
+# Approved PyPI packages for the isolated documenttools environment.
+# Do not install packages outside this list without updating AGENTS.md.
+pypdf==5.9.0
+PyMuPDF==1.26.3
+pdf2docx==0.5.8
+python-pptx==1.0.2
+python-docx==1.2.0
+reportlab==4.4.2
+PyInstaller==6.15.0

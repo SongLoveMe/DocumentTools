@@ -1,0 +1,9 @@
+name: documenttools
+channels:
+  - defaults
+dependencies:
+  - python=3.13
+  - pyqt=5.15.10
+  - pillow
+  - pytest
+  - pip
