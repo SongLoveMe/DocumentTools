@@ -142,25 +142,47 @@ def _is_documenttools_toc_page(page: Any) -> bool:
         return False
 
 
+def _marked_documenttools_toc_pages(reader: Any) -> set[int]:
+    """Return the leading run of explicitly marked generated TOC pages."""
+    marked = [
+        index for index, page in enumerate(reader.pages)
+        if bool(page.get("/DocumentToolsToc"))
+    ]
+    if not marked:
+        return set()
+    start = marked[0]
+    end = start
+    while end + 1 in marked:
+        end += 1
+    return set(range(start, end + 1))
+
+
 def _destination_page_number(reader: Any, node: Any) -> int | None:
     """Resolve both standard destination objects and DocumentTools' numeric destinations."""
+    try:
+        raw_page = node.get("/Page")
+        if isinstance(raw_page, int):
+            return int(raw_page)
+    except Exception:
+        pass
     try:
         page = reader.get_destination_page_number(node)
     except Exception:
         page = None
     if isinstance(page, int):
         return page
-    try:
-        raw_page = node.get("/Page")
-        if isinstance(raw_page, int):
-            return raw_page
-    except Exception:
-        pass
     return None
 
 
 def _source_visual_toc_pages(reader: Any) -> set[int]:
     """Detect a leading visual TOC when source bookmarks identify later content."""
+    # Generated pages carry an explicit marker. This must be checked before
+    # outline destinations because older pypdf versions can decode numeric
+    # destinations as page 0 even when they point into the body.
+    marked_pages = _marked_documenttools_toc_pages(reader)
+    if marked_pages:
+        return marked_pages
+
     try:
         outline = reader.outline
     except Exception:
@@ -184,9 +206,10 @@ def _source_visual_toc_pages(reader: Any) -> set[int]:
                 content_pages.append(page)
 
     visit(outline, top_level=True)
-    if not content_pages:
+    positive_content_pages = [page for page in content_pages if page > 0]
+    first_content_page = min(positive_content_pages) if positive_content_pages else None
+    if first_content_page is None:
         return set()
-    first_content_page = min(content_pages)
     if first_content_page <= 0:
         return set()
     try:
@@ -234,7 +257,7 @@ def _outline_nodes(reader: Any, removed_pages: set[int]) -> list[_OutlineNode]:
         result: list[_OutlineNode] = []
         for node in nodes:
             node.children = prune(node.children)
-            if node.source_page in removed_pages and _is_toc_label(node.title):
+            if node.source_page in removed_pages:
                 result.extend(node.children)
             else:
                 result.append(node)

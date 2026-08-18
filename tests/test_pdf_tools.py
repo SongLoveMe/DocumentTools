@@ -218,3 +218,61 @@ def test_generated_toc_includes_source_bookmarks_as_children(tmp_path: Path) -> 
     assert "B" in toc_text
     assert "first" in toc_text
     assert "second" in toc_text
+
+
+def test_merge_removes_visual_toc_when_source_root_bookmark_targets_it(tmp_path: Path) -> None:
+    from pypdf import PdfReader, PdfWriter
+    from reportlab.pdfgen.canvas import Canvas
+
+    first = tmp_path / "A.pdf"
+    raw = tmp_path / "B-raw.pdf"
+    second = tmp_path / "B.pdf"
+    output = tmp_path / "merged.pdf"
+    _sample_pdf(first, "A", 1)
+    canvas = Canvas(str(raw))
+    for label in ("Contents: 1, 2", "section 1 content", "section 2 content"):
+        canvas.drawString(72, 720, label)
+        canvas.showPage()
+    canvas.save()
+    writer = PdfWriter()
+    for page in PdfReader(str(raw)).pages:
+        writer.add_page(page)
+    root = writer.add_outline_item("B", 0)
+    writer.add_outline_item("1", 1, parent=root)
+    writer.add_outline_item("2", 2, parent=root)
+    with second.open("wb") as handle:
+        writer.write(handle)
+
+    entries = merge_pdfs([MergeItem(first, "A"), MergeItem(second, "B")], output)
+
+    reader = PdfReader(str(output))
+    assert len(reader.pages) == 4
+    assert [entry.start_page for entry in entries] == [2, 3]
+    assert [child.title for child in entries[1].children] == ["1", "2"]
+    assert "Contents" not in "\n".join(page.extract_text() or "" for page in reader.pages[1:])
+    assert reader.outline[1].title == "B"
+    assert [child.title for child in reader.outline[2]] == ["1", "2"]
+
+
+def test_remerge_removes_every_marked_page_from_multi_page_toc(tmp_path: Path) -> None:
+    sources: list[Path] = []
+    for index in range(41):
+        source = tmp_path / f"part-{index + 1}.pdf"
+        _sample_pdf(source, f"part {index + 1}", 1)
+        sources.append(source)
+    generated = tmp_path / "B.pdf"
+    merge_pdfs(sources, generated)
+    generated_reader = pypdf.PdfReader(str(generated))
+    assert sum(bool(page.get("/DocumentToolsToc")) for page in generated_reader.pages) == 2
+
+    first = tmp_path / "A.pdf"
+    output = tmp_path / "merged.pdf"
+    _sample_pdf(first, "A", 1)
+    entries = merge_pdfs([MergeItem(first, "A"), MergeItem(generated, "B")], output)
+
+    reader = pypdf.PdfReader(str(output))
+    assert len(reader.pages) == 44
+    assert sum(bool(page.get("/DocumentToolsToc")) for page in reader.pages) == 2
+    assert [entry.start_page for entry in entries] == [3, 4]
+    assert len(entries[1].children) == 41
+    assert "part 1 page 1" in reader.pages[3].extract_text()
