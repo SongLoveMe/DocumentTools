@@ -43,3 +43,8 @@ release/
 tmp/
 temp/
 out/
+
+# Pytest temporary work directories
+pytest-*/
+.pytest-tmp/
+.pytest-work/

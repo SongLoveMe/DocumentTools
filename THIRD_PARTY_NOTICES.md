@@ -13,6 +13,7 @@
 | python-docx | 1.2.0 | Office 文档依赖 | <https://pypi.org/project/python-docx/> |
 | Pillow | Conda 环境版本 | 图片读取和图片转 PDF | <https://pypi.org/project/Pillow/> |
 | reportlab | 4.4.2 | 自动目录页和测试夹具 | <https://pypi.org/project/reportlab/> |
+| XlsxWriter | 3.2.9 | PDF 表格转 Excel 工作簿 | <https://pypi.org/project/XlsxWriter/> |
 | PyInstaller | 6.15.0 | Windows 可执行文件打包 | <https://pypi.org/project/PyInstaller/> |
 | LibreOffice | 发行包实际版本 | 内置 Office/WPS 转 PDF 运行时 | <https://www.libreoffice.org/> |
 

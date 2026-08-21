@@ -17,7 +17,7 @@ if (-not (Test-Path $runtime)) { throw "Embedded conversion runtime is missing: 
 Push-Location $projectRoot
 try {
     & $python -m PyInstaller --noconfirm --clean --windowed --name DocumentTools --icon assets\documenttools.ico --paths src `
-        --collect-all pypdf --collect-all fitz --collect-all pdf2docx --collect-all pptx --collect-all reportlab main.py
+        --collect-all pypdf --collect-all fitz --collect-all pdf2docx --collect-all pptx --collect-all reportlab --collect-all xlsxwriter main.py
     $iss = Join-Path $projectRoot "installer\DocumentTools.iss"
     $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
     if (Test-Path $iscc) {

@@ -45,9 +45,16 @@ class EmbeddedOfficeEngine:
         if not executable:
             raise ConversionEngineError("内置转换运行时不可用，请重新安装完整版本的 DocumentTools。")
         with tempfile.TemporaryDirectory(prefix="documenttools-runtime-") as temp_dir:
+            startupinfo = None
+            creationflags = 0
+            if os.name == "nt":
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = subprocess.SW_HIDE
+                creationflags = subprocess.CREATE_NO_WINDOW
             completed = subprocess.run(
                 [str(executable), "--headless", "--convert-to", "pdf", "--outdir", temp_dir, str(source.resolve())],
-                capture_output=True, text=True, check=False,
+                capture_output=True, text=True, check=False, startupinfo=startupinfo, creationflags=creationflags,
             )
             converted = Path(temp_dir) / f"{source.stem}.pdf"
             if completed.returncode != 0 or not converted.is_file():

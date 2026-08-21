@@ -9,7 +9,7 @@ pytest.importorskip("PyQt5")
 from PyQt5.QtCore import QThreadPool
 from PyQt5.QtWidgets import QApplication
 
-from documenttools.app import MergeTab
+from documenttools.ui.merge_tab import MergeTab
 
 
 @pytest.fixture(scope="module")

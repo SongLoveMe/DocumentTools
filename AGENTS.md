@@ -1,8 +1,8 @@
-# AGENTS.md
+# AGENTS.md instructions for D:\other\Tool_Collection\DocumentTools
 
 ## 项目定位
 
-DocumentTools 是 Windows x64 本地文档处理工具。v1 提供标准 Office/WPS 文档与图片转 PDF、PDF 合并目录/书签/封面、PDF 转 Word/PPT。所有输入和输出都留在本机，不调用云端 API。
+DocumentTools 是 Windows x64 本地文档处理工具。V2 提供标准 Office/WPS 文档与图片转 PDF、PDF 合并目录/书签/封面、PDF 页面排列与编辑、PDF 转 Word/PPT/Excel/PNG/JPG。所有输入和输出留在本机，不调用云端 API。
 
 ## 开发环境
 
@@ -16,29 +16,53 @@ DocumentTools 是 Windows x64 本地文档处理工具。v1 提供标准 Office/
 - 不覆盖输入文件；输出冲突自动生成 `文件名 (1).扩展名`。
 - WPS 兼容指 WPS 创建的 `doc/docx`、`ppt/pptx`、`xls/xlsx`；不承诺 `.wps/.dps/.et` 专有格式。
 - 合并 PDF 只调用 `decrypt("")`，支持可查看但禁止编辑的 PDF；需要真实打开密码时明确失败，不猜密码。
-- 合并列表顺序由用户决定；移除、拖拽或按钮排序后自动标题要按位置更新，手工标题保持不变。
-- 目录标题支持数字、中文数字、英文字母和无序号初始模板，并可逐行编辑；自动目录页可关闭。
-- 检测到源文件开头的视觉目录页时删除；源电子书签必须同时显示在新目录页和自定义顶级书签下，并重新映射页码。
-- 对 `Creator=DocumentTools` 的再次合并必须兼容数值型书签目的地，并按生成目录页数量去重；新生成的目录页必须带 `/DocumentToolsToc` 页面标记，以便元数据被改写后仍可删除旧目录页。
-- 页面规格默认统一为 A4 竖版，等比缩放、居中、白边、不裁切；提供 A3/A4/A5/B5/Letter、横竖方向和“保持原始页面规格”。封面和自动目录固定 A4 竖版。
+- 合并列表顺序由用户决定；移除、拖拽或按钮排序后自动标题按位置更新，手工标题保持不变。
+- 页面操作参数必须按当前操作显示，不得保留无关的冗余控件。
+- 只有重排序 PDF 允许缩略图拖拽；拆分、提取、删除、旋转、页码操作禁止拖拽。
+- “转为 PDF”只处理 Word、PPT、Excel、图片；PDF 转 Word/PPT/Excel/PNG/JPG 只放在“从 PDF 转换”。
+- 图片合并选项只有当前选择列表至少有两张图片时才显示。
+- 输出日志必须保存真实路径；双击前检查文件存在，文件不存在时明确提示。
 - 任务失败只影响当前任务，界面必须显示可定位的错误原因。
 
 ## 目录职责
 
-- `src/documenttools/app.py`：PyQt5 界面、任务调度和用户交互。
-- `src/documenttools/conversions.py`：图片/Office/PDF 转换流程。
+- `src/documenttools/app.py`：兼容导出层，只导出 `run`、`MainWindow`、`ConversionTab`、`MergeTab`。
+- `src/documenttools/conversions.py`：图片/Office/PDF 转换领域流程。
 - `src/documenttools/engines.py`：内置 LibreOffice 转换运行时适配器。
 - `src/documenttools/paths.py`：文件类型分类和冲突路径生成。
-- `src/documenttools/pdf_tools.py`：PDF 合并、目录、书签、页面规格和加密处理。
-- `tests/`：从公共模块接口验证行为；PDF 目录回归用例集中在 `tests/test_pdf_tools.py`。
-- `scripts/`、`installer/`、`vendor/`：打包、安装和运行时交付，不参与应用领域逻辑。
+- `src/documenttools/pdf_tools.py`：PDF 合并、目录、书签、页面规格、加密和页面操作。
+- `src/documenttools/ui/tasking.py`：唯一的 `Task`/`WorkerSignals` 实现。
+- `src/documenttools/ui/widgets.py`：唯一的 `FileTable`、`OutputLog` 和共享 UI 辅助函数。
+- `src/documenttools/ui/conversion_tab.py`：转为 PDF 工作区。
+- `src/documenttools/ui/merge_tab.py`：PDF 合并工作区。
+- `src/documenttools/ui/pdf_workbench.py`：拆分、提取、删除、重排序、页码、旋转和 PDF 转换工作区。
+- `src/documenttools/ui/main_window.py`：主窗口、左侧导航和全局样式。
+- `tests/`：从公共接口和 UI 行为验证功能；不依赖构建产物。
+- `scripts/`、`installer/`、`vendor/`：打包、安装和运行时交付，不参与领域逻辑。
+
+## 维护规则
+
+- 不要在 `app.py` 重新实现窗口、任务或控件；它必须保持兼容薄层。
+- 不要在多个模块复制 `Task`、`WorkerSignals`、`FileTable`、`OutputLog`。
+- 新增 UI 工作区放到 `src/documenttools/ui/`；领域行为放在 `conversions.py`、`pdf_tools.py` 或 `paths.py`。
+- 修改运行时路径时同时检查 `engines.py`、`scripts/build.ps1` 和 `installer/DocumentTools.iss`。
+- 版本 `2.0.0` 必须同步于 `pyproject.toml`、`src/documenttools/__init__.py`、`installer/DocumentTools.iss`。
+- 新架构决策记录到 `docs/ARCHITECTURE.md`；开发与发布流程记录到 `docs/DEVELOPMENT.md`。
+- 不提交 `build`、`dist`、`release`、缓存、测试临时目录或本机配置。
 
 ## 验证
 
 使用以下命令运行全部测试：
 
 ```powershell
+$env:QT_QPA_PLATFORM = "offscreen"
 D:\Anaconda\envs\documenttools\python.exe -m pytest
 ```
 
-不要提交 `build`、`dist`、`release`、缓存、临时文件或本机配置。
+构建前运行：
+
+```powershell
+git diff --check
+```
+
+正式构建前必须确认 `vendor/libreoffice/program/soffice.exe` 存在；构建脚本使用 PyInstaller `--windowed`，LibreOffice 子进程在 Windows 使用无窗口创建标志。

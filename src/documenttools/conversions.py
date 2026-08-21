@@ -120,3 +120,114 @@ def convert_pdf_to_ppt(source: str | Path, output_directory: str | Path, output_
     finally:
         document.close()
     return output
+
+
+def _open_pdf_document(source: str | Path):
+    try:
+        import fitz  # type: ignore[import-not-found]
+    except ImportError as exc:
+        raise ConversionError("PDF 转换支持未安装，请使用 documenttools 环境安装依赖。") from exc
+    source_path = Path(source)
+    if classify_file(source_path) != "pdf" or not source_path.is_file():
+        raise ConversionError("请选择可读取的 PDF 文件。")
+    try:
+        document = fitz.open(source_path)
+    except Exception as exc:
+        raise ConversionError(f"无法打开 {source_path.name}：{exc}") from exc
+    if document.needs_pass and not document.authenticate(""):
+        document.close()
+        raise ConversionError(f"{source_path.name} 需要打开密码，无法猜测密码。")
+    if document.page_count == 0:
+        document.close()
+        raise ConversionError(f"{source_path.name} 没有页面。")
+    return source_path, document
+
+
+def _unique_directory(parent: Path, stem: str) -> Path:
+    candidate = parent / stem
+    sequence = 1
+    while candidate.exists():
+        candidate = parent / f"{stem} ({sequence})"
+        sequence += 1
+    candidate.mkdir(parents=True, exist_ok=False)
+    return candidate
+
+
+def convert_pdf_to_excel(source: str | Path, output_directory: str | Path | None = None, output_stem: str | None = None) -> Path:
+    """Extract detectable digital-PDF tables into one worksheet per table."""
+    try:
+        import xlsxwriter  # type: ignore[import-not-found]
+    except ImportError as exc:
+        raise ConversionError("PDF 转 Excel 支持未安装，请安装 requirements.lock 中的 XlsxWriter。") from exc
+    source_path, document = _open_pdf_document(source)
+    directory = Path(output_directory) if output_directory else source_path.parent
+    output = unique_path(directory, output_stem or f"{source_path.stem}_表格", ".xlsx")
+    extracted: list[tuple[int, list[list[object]]]] = []
+    try:
+        for page_index, page in enumerate(document, start=1):
+            try:
+                tables = page.find_tables()
+            except Exception as exc:
+                raise ConversionError(f"第 {page_index} 页表格识别失败：{exc}") from exc
+            for table in tables.tables:
+                values = table.extract()
+                if values and any(any(cell not in (None, "") for cell in row) for row in values):
+                    extracted.append((page_index, values))
+        if not extracted:
+            raise ConversionError("未识别到可提取的表格。仅支持带文本层的规则表格，不支持扫描件或复杂视觉排版。")
+        directory.mkdir(parents=True, exist_ok=True)
+        workbook = xlsxwriter.Workbook(str(output))
+        try:
+            for number, (page_index, rows) in enumerate(extracted, start=1):
+                worksheet = workbook.add_worksheet(f"第 {page_index} 页-表 {number}")
+                for row_index, row in enumerate(rows):
+                    for column_index, value in enumerate(row):
+                        worksheet.write(row_index, column_index, "" if value is None else str(value))
+                worksheet.freeze_panes(1, 0)
+                for column_index, row in enumerate(rows[0] if rows else []):
+                    values = ["" if source_row[column_index] is None else str(source_row[column_index]) for source_row in rows if column_index < len(source_row)]
+                    worksheet.set_column(column_index, column_index, min(max(max((len(value) for value in values), default=8) + 2, 10), 40))
+        finally:
+            workbook.close()
+    except Exception:
+        if output.exists():
+            output.unlink()
+        raise
+    finally:
+        document.close()
+    return output
+
+
+def convert_pdf_to_images(
+    source: str | Path,
+    *,
+    image_format: str = "png",
+    dpi: int = 150,
+    output_directory: str | Path | None = None,
+) -> list[Path]:
+    """Render each PDF page to PNG or high-quality JPEG in a unique folder."""
+    import fitz  # type: ignore[import-not-found]
+    if dpi not in {72, 150, 300}:
+        raise ConversionError("图片分辨率仅支持 72、150 或 300 DPI。")
+    normalized_format = image_format.lower().replace("jpeg", "jpg")
+    if normalized_format not in {"png", "jpg"}:
+        raise ConversionError("图片格式仅支持 PNG 或 JPG。")
+    source_path, document = _open_pdf_document(source)
+    if output_directory:
+        target = _unique_directory(Path(output_directory), f"{source_path.stem}_{normalized_format.upper()}")
+    else:
+        target = _unique_directory(source_path.parent, f"{source_path.stem}_{normalized_format.upper()}")
+    scale = dpi / 72
+    results: list[Path] = []
+    try:
+        for page_index, page in enumerate(document, start=1):
+            target_path = target / f"{source_path.stem}_{page_index:04d}.{normalized_format}"
+            pixmap = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
+            if normalized_format == "jpg":
+                pixmap.save(str(target_path), jpg_quality=95)
+            else:
+                pixmap.save(str(target_path))
+            results.append(target_path)
+    finally:
+        document.close()
+    return results
