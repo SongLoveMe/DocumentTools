@@ -4,9 +4,11 @@ import pytest
 
 pypdf = pytest.importorskip("pypdf")
 reportlab = pytest.importorskip("reportlab")
+pytest.importorskip("fitz")
 
 from documenttools.pdf_tools import (
-    PageNumberConfig, PdfOperationError, add_pdf_page_numbers, delete_pdf_pages,
+    CompressionPreset, PageNumberConfig, PdfOperationError, add_pdf_page_numbers, compress_pdf,
+    delete_pdf_pages, estimate_pdf_compression,
     extract_pdf_pages, parse_page_selection, reorder_pdf_pages, rotate_pdf_pages,
     split_pdf,
 )
@@ -52,3 +54,44 @@ def test_rotate_and_number_pages(tmp_path: Path):
     numbered = add_pdf_page_numbers(source, config=PageNumberConfig(start_number=10, position="bottom-center"))
     assert pages(numbered) == 2
     assert "10" in (pypdf.PdfReader(str(numbered)).pages[0].extract_text() or "")
+
+
+def test_pdf_compression_presets_keep_page_count_and_input(tmp_path: Path):
+    source = tmp_path / "source.pdf"
+    make_pdf(source, 3)
+    original_size = source.stat().st_size
+
+    estimate = estimate_pdf_compression(source, CompressionPreset.BALANCED)
+    assert estimate.original_bytes == original_size
+    assert estimate.estimated_bytes > 0
+    assert 0 <= estimate.estimated_ratio <= 1
+    assert estimate.confidence
+
+    outputs = []
+    for preset in CompressionPreset:
+        output = tmp_path / f"compressed-{preset.value}.pdf"
+        result = compress_pdf(source, output, preset=preset)
+        outputs.append(output)
+        assert result.output_path == output
+        assert output.exists()
+        assert len(pypdf.PdfReader(str(output)).pages) == 3
+        assert source.stat().st_size == original_size
+
+    assert len(outputs) == 4
+
+
+def test_pdf_compression_rejects_overwrite_and_real_password(tmp_path: Path):
+    source = tmp_path / "source.pdf"
+    make_pdf(source, 1)
+    with pytest.raises(PdfOperationError, match="覆盖"):
+        compress_pdf(source, source)
+
+    protected = tmp_path / "protected.pdf"
+    writer = pypdf.PdfWriter()
+    for page in pypdf.PdfReader(str(source)).pages:
+        writer.add_page(page)
+    writer.encrypt("secret")
+    with protected.open("wb") as handle:
+        writer.write(handle)
+    with pytest.raises(PdfOperationError, match="打开密码"):
+        compress_pdf(protected, tmp_path / "protected-output.pdf")

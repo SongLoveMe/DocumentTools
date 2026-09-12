@@ -7,7 +7,7 @@
 | Python | 3.13 | 运行时 | <https://www.python.org/> |
 | PyQt5 / Qt | 5.15.10 / Qt 5.15.2 | Windows GUI | <https://pypi.org/project/PyQt5/> |
 | pypdf | 5.9.0 | PDF 读写、书签和目录 | <https://pypi.org/project/pypdf/> |
-| PyMuPDF | 1.26.3 | PDF 页面渲染 | <https://pypi.org/project/PyMuPDF/> |
+| PyMuPDF | 1.26.3 | PDF 页面渲染和本地 PDF 压缩 | <https://pypi.org/project/PyMuPDF/> |
 | pdf2docx | 0.5.8 | PDF 转 Word | <https://pypi.org/project/pdf2docx/> |
 | python-pptx | 1.0.2 | PDF 转 PPT | <https://pypi.org/project/python-pptx/> |
 | python-docx | 1.2.0 | Office 文档依赖 | <https://pypi.org/project/python-docx/> |
@@ -23,3 +23,5 @@
 - PyQt5/Qt 的许可和归属信息随 PyQt5/Qt 发行包交付。
 - LibreOffice 必须使用官方 Windows x64 发行包，并记录实际版本、下载地址、SHA-256 和原始许可证文件；当前仓库只保留 `vendor/libreoffice/README.md` 占位说明。
 - DocumentTools 不依赖系统 Office、WPS 或系统 LibreOffice，也不会上传用户文档。
+
+- v2.1 PDF 压缩复用已锁定的 PyMuPDF 1.26.3 Python 包，不新增 Ghostscript、qpdf 或其他第三方 PDF 可执行程序。

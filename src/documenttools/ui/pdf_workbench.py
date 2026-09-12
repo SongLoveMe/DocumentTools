@@ -13,12 +13,12 @@ from PyQt5.QtWidgets import (
 
 from ..conversions import convert_pdf_to_excel, convert_pdf_to_images, convert_pdf_to_ppt, convert_pdf_to_word
 from .tasking import Task
-from .widgets import OutputLog, open_folder
+from .widgets import OutputDirectoryControls, OutputLog, open_folder
 from ..paths import unique_path
 from ..pdf_tools import (
-    PAGE_NUMBER_FORMATS, PAGE_NUMBER_POSITIONS, PageNumberConfig,
-    add_pdf_page_numbers, delete_pdf_pages, extract_pdf_pages, reorder_pdf_pages,
-    rotate_pdf_pages, split_pdf,
+    PAGE_NUMBER_FORMATS, PAGE_NUMBER_POSITIONS, PageNumberConfig, CompressionPreset,
+    add_pdf_page_numbers, compress_pdf, delete_pdf_pages, estimate_pdf_compression,
+    extract_pdf_pages, reorder_pdf_pages, rotate_pdf_pages, split_pdf,
 )
 
 
@@ -225,9 +225,8 @@ class PageOperationPanel(QWidget):
         self.options.addWidget(reorder_box)
 
         self.output_dir = Path.home() / "Documents"
-        self.output_label = QLabel(str(self.output_dir))
-        self.choose_output_button = QPushButton("选择输出目录")
-        self.open_button = QPushButton("打开输出目录")
+        self.output_controls = OutputDirectoryControls(self.output_dir)
+        self.output_controls.directory_changed.connect(self._output_changed)
         self.run_button = QPushButton("开始处理")
         self.log = OutputLog()
 
@@ -239,13 +238,8 @@ class PageOperationPanel(QWidget):
         operation_row.addWidget(self.operation, 1)
         layout.addLayout(operation_row)
         layout.addWidget(self.options)
-        output_row = QHBoxLayout()
-        output_row.addWidget(QLabel("输出目录"))
-        output_row.addWidget(self.output_label, 1)
-        layout.addLayout(output_row)
+        layout.addWidget(self.output_controls)
         actions = QHBoxLayout()
-        actions.addWidget(self.choose_output_button)
-        actions.addWidget(self.open_button)
         actions.addStretch()
         actions.addWidget(self.run_button)
         layout.addLayout(actions)
@@ -254,8 +248,6 @@ class PageOperationPanel(QWidget):
 
         self.operation.currentIndexChanged.connect(self.refresh)
         self.mode.currentIndexChanged.connect(self.refresh)
-        self.choose_output_button.clicked.connect(self.choose_output)
-        self.open_button.clicked.connect(self.open_output)
         self.run_button.clicked.connect(self.start)
         self.refresh()
 
@@ -305,29 +297,8 @@ class PageOperationPanel(QWidget):
         task.signals.failed.connect(self.fail)
         self.pool.start(task)
 
-    def choose_output(self) -> None:
-        from PyQt5.QtWidgets import QFileDialog
-        selected = QFileDialog.getExistingDirectory(self, "选择输出目录", str(self.output_dir))
-        if selected:
-            self.output_dir = Path(selected)
-            self.output_label.setText(str(self.output_dir))
-
-    def open_output(self) -> None:
-        if self.output_dir.exists():
-            open_folder(self.output_dir)
-        else:
-            QMessageBox.warning(self, "目录不存在", "输出目录不存在：\n" + str(self.output_dir))
-
-    def done(self, result: object) -> None:
-        self.run_button.setEnabled(True)
-        outputs = result if isinstance(result, list) else [result]
-        self.output_label.setText(f"{self.output_dir}（本次输出 {len(outputs)} 个）")
-        for path in outputs:
-            self.log.add_message(f"完成：{path}", path)
-
-    def fail(self, error: str) -> None:
-        self.run_button.setEnabled(True)
-        self.log.add_message(f"失败：{error}")
+    def _output_changed(self, value: str) -> None:
+        self.output_dir = Path(value)
 
 
 class NumberingPanel(QWidget):
@@ -353,10 +324,9 @@ class NumberingPanel(QWidget):
         self.size.setSuffix(" pt")
         self.color = QLineEdit("#000000")
         self.output_dir = Path.home() / "Documents"
-        self.output_label = QLabel(str(self.output_dir))
+        self.output_controls = OutputDirectoryControls(self.output_dir)
+        self.output_controls.directory_changed.connect(self._output_changed)
         self.run_button = QPushButton("添加页码")
-        self.choose_output_button = QPushButton("选择输出目录")
-        self.open_button = QPushButton("打开输出目录")
         self.log = OutputLog()
         form = QFormLayout()
         form.addRow("页面范围", self.pages)
@@ -369,19 +339,12 @@ class NumberingPanel(QWidget):
         layout.addWidget(QLabel("添加页码：默认底部居中、从 1 开始，不覆盖源文件。"))
         layout.addWidget(self.source)
         layout.addLayout(form)
-        output = QHBoxLayout()
-        output.addWidget(QLabel("输出目录"))
-        output.addWidget(self.output_label, 1)
-        layout.addLayout(output)
+        layout.addWidget(self.output_controls)
         actions = QHBoxLayout()
-        actions.addWidget(self.choose_output_button)
-        actions.addWidget(self.open_button)
         actions.addStretch()
         actions.addWidget(self.run_button)
         layout.addLayout(actions)
         layout.addWidget(self.log)
-        self.choose_output_button.clicked.connect(self.choose_output)
-        self.open_button.clicked.connect(self.open_output)
         self.run_button.clicked.connect(self.start)
 
     def start(self) -> None:
@@ -398,18 +361,8 @@ class NumberingPanel(QWidget):
         task.signals.failed.connect(self.fail)
         self.pool.start(task)
 
-    def choose_output(self) -> None:
-        from PyQt5.QtWidgets import QFileDialog
-        selected = QFileDialog.getExistingDirectory(self, "选择输出目录", str(self.output_dir))
-        if selected:
-            self.output_dir = Path(selected)
-            self.output_label.setText(str(self.output_dir))
-
-    def open_output(self) -> None:
-        if self.output_dir.exists():
-            open_folder(self.output_dir)
-        else:
-            QMessageBox.warning(self, "目录不存在", "输出目录不存在：\n" + str(self.output_dir))
+    def _output_changed(self, value: str) -> None:
+        self.output_dir = Path(value)
 
     def complete(self, value: object) -> None:
         self.run_button.setEnabled(True)
@@ -431,10 +384,9 @@ class RotationPanel(QWidget):
         self.direction.addItem("左转 90°", "left")
         self.direction.addItem("右转 90°", "right")
         self.output_dir = Path.home() / "Documents"
-        self.output_label = QLabel(str(self.output_dir))
+        self.output_controls = OutputDirectoryControls(self.output_dir)
+        self.output_controls.directory_changed.connect(self._output_changed)
         self.run_button = QPushButton("旋转页面")
-        self.choose_output_button = QPushButton("选择输出目录")
-        self.open_button = QPushButton("打开输出目录")
         self.log = OutputLog()
         form = QFormLayout()
         form.addRow("页面范围", self.pages)
@@ -443,19 +395,12 @@ class RotationPanel(QWidget):
         layout.addWidget(QLabel("旋转页面：对选定页面执行左转或右转 90°。"))
         layout.addWidget(self.source)
         layout.addLayout(form)
-        output = QHBoxLayout()
-        output.addWidget(QLabel("输出目录"))
-        output.addWidget(self.output_label, 1)
-        layout.addLayout(output)
+        layout.addWidget(self.output_controls)
         actions = QHBoxLayout()
-        actions.addWidget(self.choose_output_button)
-        actions.addWidget(self.open_button)
         actions.addStretch()
         actions.addWidget(self.run_button)
         layout.addLayout(actions)
         layout.addWidget(self.log)
-        self.choose_output_button.clicked.connect(self.choose_output)
-        self.open_button.clicked.connect(self.open_output)
         self.run_button.clicked.connect(self.start)
 
     def start(self) -> None:
@@ -474,18 +419,8 @@ class RotationPanel(QWidget):
         task.signals.failed.connect(self.fail)
         self.pool.start(task)
 
-    def choose_output(self) -> None:
-        from PyQt5.QtWidgets import QFileDialog
-        selected = QFileDialog.getExistingDirectory(self, "选择输出目录", str(self.output_dir))
-        if selected:
-            self.output_dir = Path(selected)
-            self.output_label.setText(str(self.output_dir))
-
-    def open_output(self) -> None:
-        if self.output_dir.exists():
-            open_folder(self.output_dir)
-        else:
-            QMessageBox.warning(self, "目录不存在", "输出目录不存在：\n" + str(self.output_dir))
+    def _output_changed(self, value: str) -> None:
+        self.output_dir = Path(value)
 
     def complete(self, value: object) -> None:
         self.run_button.setEnabled(True)
@@ -513,19 +448,13 @@ class FromPdfPanel(QWidget):
         dpi_form.setContentsMargins(0, 0, 0, 0)
         dpi_form.addRow("图片分辨率", self.dpi)
         self.output_dir = Path.home() / "Documents"
-        self.output_label = QLabel(str(self.output_dir))
+        self.output_controls = OutputDirectoryControls(self.output_dir)
+        self.output_controls.directory_changed.connect(self._output_changed)
         self.run_button = QPushButton("开始转换")
-        self.open_button = QPushButton("打开输出目录")
         self.log = OutputLog()
         form = QFormLayout()
         form.addRow("目标格式", self.mode)
         form.addRow(self.dpi_row)
-        output = QHBoxLayout()
-        choose_output = QPushButton("选择输出目录")
-        choose_output.clicked.connect(self.choose_output)
-        output.addWidget(choose_output)
-        output.addWidget(self.output_label, 1)
-        output.addWidget(self.open_button)
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("从 PDF 转换：Word、PPT、可识别表格 Excel、逐页 PNG/JPG。"))
         top = QHBoxLayout()
@@ -535,12 +464,14 @@ class FromPdfPanel(QWidget):
         top.addWidget(self.source_label, 1)
         layout.addLayout(top)
         layout.addLayout(form)
-        layout.addLayout(output)
-        layout.addWidget(self.run_button)
+        layout.addWidget(self.output_controls)
+        actions = QHBoxLayout()
+        actions.addStretch()
+        actions.addWidget(self.run_button)
+        layout.addLayout(actions)
         layout.addWidget(self.log)
         self.mode.currentIndexChanged.connect(lambda: self.dpi_row.setVisible(self.mode.currentData() in {"png", "jpg"}))
         self.run_button.clicked.connect(self.start)
-        self.open_button.clicked.connect(self.open_output)
         self.dpi_row.setVisible(False)
 
     def choose(self) -> None:
@@ -550,18 +481,8 @@ class FromPdfPanel(QWidget):
             self.source = Path(value)
             self.source_label.setText(value)
 
-    def choose_output(self) -> None:
-        from PyQt5.QtWidgets import QFileDialog
-        value = QFileDialog.getExistingDirectory(self, "选择输出目录", str(self.output_dir))
-        if value:
-            self.output_dir = Path(value)
-            self.output_label.setText(value)
-
-    def open_output(self) -> None:
-        if self.output_dir.exists():
-            open_folder(self.output_dir)
-        else:
-            QMessageBox.warning(self, "目录不存在", "输出目录不存在：\n" + str(self.output_dir))
+    def _output_changed(self, value: str) -> None:
+        self.output_dir = Path(value)
 
     def start(self) -> None:
         if not self.source:
@@ -591,3 +512,124 @@ class FromPdfPanel(QWidget):
     def fail(self, error: str) -> None:
         self.run_button.setEnabled(True)
         self.log.add_message(f"失败：{error}")
+
+
+
+class CompressionPanel(QWidget):
+    """Local Python PDF compression with quick size estimates."""
+
+    PRESETS = (
+        ("无损优化（不明显降低画质）", CompressionPreset.LOSSLESS),
+        ("轻度压缩（优先保持清晰度）", CompressionPreset.LIGHT),
+        ("平衡压缩（推荐）", CompressionPreset.BALANCED),
+        ("强力压缩（优先减小体积）", CompressionPreset.STRONG),
+    )
+
+    def __init__(self, pool: QThreadPool):
+        super().__init__()
+        self.pool = pool
+        self.source: Path | None = None
+        self.output_dir = Path.home() / "Documents"
+        self.source_label = QLabel("尚未选择 PDF")
+        self.preset = QComboBox()
+        for label, value in self.PRESETS:
+            self.preset.addItem(label, value)
+        self.estimate_label = QLabel("选择 PDF 后显示预估大小。")
+        self.estimate_label.setWordWrap(True)
+        self.output_controls = OutputDirectoryControls(self.output_dir)
+        self.output_controls.directory_changed.connect(self._output_changed)
+        self.choose_button = QPushButton("选择 PDF")
+        self.run_button = QPushButton("压缩 PDF")
+        self.log = OutputLog()
+        self.choose_button.clicked.connect(self.choose)
+        self.preset.currentIndexChanged.connect(self.refresh_estimate)
+        self.run_button.clicked.connect(self.start)
+        self._build()
+
+    def _build(self) -> None:
+        layout = QVBoxLayout(self)
+        title = QLabel("压缩 PDF")
+        title.setObjectName("sectionTitle")
+        layout.addWidget(title)
+        layout.addWidget(QLabel("使用本地 Python 组件压缩 PDF，不调用系统中的外部 PDF 程序。"))
+        source_row = QHBoxLayout()
+        source_row.addWidget(self.choose_button)
+        source_row.addWidget(self.source_label, 1)
+        layout.addLayout(source_row)
+        form = QFormLayout()
+        form.addRow("压缩档位", self.preset)
+        form.addRow("大小预估", self.estimate_label)
+        layout.addLayout(form)
+        layout.addWidget(QLabel("预估大小仅供参考，最终大小以实际生成文件为准。"))
+        layout.addWidget(self.output_controls)
+        actions = QHBoxLayout()
+        actions.addStretch()
+        actions.addWidget(self.run_button)
+        layout.addLayout(actions)
+        layout.addWidget(QLabel("处理日志（双击输出记录可打开文件）"))
+        layout.addWidget(self.log)
+
+    def choose(self) -> None:
+        from PyQt5.QtWidgets import QFileDialog
+        value, _ = QFileDialog.getOpenFileName(self, "选择 PDF", filter="PDF 文件 (*.pdf)")
+        if value:
+            self.source = Path(value)
+            self.source_label.setText(value)
+            self.refresh_estimate()
+
+    def _output_changed(self, value: str) -> None:
+        self.output_dir = Path(value)
+
+    def refresh_estimate(self) -> None:
+        if not self.source:
+            self.estimate_label.setText("选择 PDF 后显示预估大小。")
+            return
+        try:
+            estimate = estimate_pdf_compression(self.source, self.preset.currentData())
+        except Exception as exc:
+            self.estimate_label.setText(f"无法预估：{exc}")
+            return
+        original = _format_size(estimate.original_bytes)
+        projected = _format_size(estimate.estimated_bytes)
+        percent = estimate.estimated_ratio * 100
+        self.estimate_label.setText(
+            f"原始 {original} → 预计约 {projected}，预计减少 {percent:.1f}%（可信度：{estimate.confidence}）\n{estimate.message}"
+        )
+
+    def start(self) -> None:
+        if not self.source:
+            QMessageBox.warning(self, "无法开始", "请先选择 PDF。")
+            return
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        target = unique_path(self.output_dir, f"{self.source.stem}_压缩", ".pdf")
+        self.run_button.setEnabled(False)
+        task = Task(lambda: compress_pdf(self.source, target, preset=self.preset.currentData()))
+        task.signals.completed.connect(self.complete)
+        task.signals.failed.connect(self.fail)
+        self.pool.start(task)
+
+    def complete(self, result: object) -> None:
+        self.run_button.setEnabled(True)
+        output = result
+        if hasattr(result, "output_path"):
+            saved = result.output_path
+            self.log.add_message(
+                f"完成：{saved}（{_format_size(result.original_bytes)} → {_format_size(result.output_bytes)}，减少 {result.compression_ratio * 100:.1f}%）",
+                saved,
+            )
+        else:
+            self.log.add_message(f"完成：{output}", output)
+        self.refresh_estimate()
+
+    def fail(self, error: str) -> None:
+        self.run_button.setEnabled(True)
+        self.log.add_message(f"失败：{error}")
+
+
+def _format_size(size: int) -> str:
+    value = float(size)
+    for unit in ("B", "KB", "MB", "GB"):
+        if value < 1024 or unit == "GB":
+            return f"{value:.1f} {unit}" if unit != "B" else f"{int(value)} B"
+        value /= 1024
+    return f"{value:.1f} GB"

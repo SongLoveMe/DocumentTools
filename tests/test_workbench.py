@@ -8,7 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PyQt5")
 
 from PyQt5.QtCore import QThreadPool
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QTabWidget
 
 from documenttools.app import MainWindow
 from documenttools.ui.pdf_workbench import PageOperationPanel
@@ -27,6 +27,7 @@ def test_main_window_has_v2_categories(app):
         "排列 PDF", "转为 PDF", "从 PDF 转换", "编辑 PDF"
     ]
     assert window.stack.count() == 4
+    assert window.stack.widget(3).findChildren(QTabWidget)[0].tabText(2) == "压缩 PDF"
     window.close()
 
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.0 - 2026-09-12
+
+- Added local Python PDF compression with lossless, light, balanced and strong presets.
+- Added local compression-size estimates and actual compression result logging.
+- Unified output-directory controls and action layout across workspaces.
+- Added the editable SVG source for the DocumentTools application icon.
+- Updated project, installer and documentation version metadata to 2.1.0.
+
 ## 2.0.0 - 2026-08-20
 
 - Added PDF page operations: split, extract, delete, reorder, page numbering and rotation.

@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, Q
 from ..paths import unique_path
 from ..pdf_tools import TITLE_TEMPLATES, MergeItem, PageSizeConfig, format_directory_title, merge_pdfs
 from .tasking import Task
-from .widgets import FileTable, OutputLog
+from .widgets import FileTable, OutputFileControls, OutputLog
 
 class MergeTab(QWidget):
     def __init__(self, pool: QThreadPool):
@@ -21,7 +21,8 @@ class MergeTab(QWidget):
         self.table.order_changed.connect(self.apply_title_template)
         self.cover: str | None = None
         self.output_path = str(Path.home() / "Documents" / "merged.pdf")
-        self.output_label = QLabel(self.output_path)
+        self.output_controls = OutputFileControls(self.output_path)
+        self.output_controls.file_changed.connect(self._output_changed)
         self.include_toc = QCheckBox("生成目录页")
         self.include_toc.setChecked(True)
         self.title_template = QComboBox()
@@ -48,9 +49,7 @@ class MergeTab(QWidget):
         self.progress = QProgressBar()
         self.log = OutputLog()
         self.start_button = QPushButton("合并 PDF")
-        self.open_button = QPushButton("打开输出目录")
         self.start_button.clicked.connect(self.start)
-        self.open_button.clicked.connect(self.open_output)
         self._build()
 
     def _build(self) -> None:
@@ -92,17 +91,10 @@ class MergeTab(QWidget):
         settings.addWidget(QLabel("封面"), 3, 0)
         settings.addWidget(self.cover_label, 3, 1, 1, 4)
         layout.addLayout(settings)
-        output = QHBoxLayout()
-        output.addWidget(QLabel("输出文件"))
-        output.addWidget(self.output_label, 1)
-        choose = QPushButton("选择输出文件")
-        choose.clicked.connect(self.choose_output)
-        output.addWidget(choose)
-        layout.addLayout(output)
+        layout.addWidget(self.output_controls)
         actions = QHBoxLayout()
-        actions.addWidget(self.start_button)
-        actions.addWidget(self.open_button)
         actions.addStretch()
+        actions.addWidget(self.start_button)
         layout.addLayout(actions)
         layout.addWidget(QLabel("处理日志（双击输出记录可打开文件）"))
         layout.addWidget(self.progress)
@@ -165,18 +157,8 @@ class MergeTab(QWidget):
             self.cover = selected
             self.cover_label.setText(selected)
 
-    def choose_output(self) -> None:
-        selected, _ = QFileDialog.getSaveFileName(self, "选择合并输出文件", self.output_path, "PDF 文件 (*.pdf)")
-        if selected:
-            self.output_path = selected if selected.lower().endswith(".pdf") else selected + ".pdf"
-            self.output_label.setText(self.output_path)
-
-    def open_output(self) -> None:
-        folder = Path(self.output_path).parent
-        if folder.exists():
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
-        else:
-            QMessageBox.warning(self, "目录不存在", "输出目录不存在：\n" + str(folder))
+    def _output_changed(self, value: str) -> None:
+        self.output_path = value
 
     def start(self) -> None:
         if self.table.rowCount() < 1:
@@ -210,7 +192,7 @@ class MergeTab(QWidget):
         self.progress.setValue(1)
         self.start_button.setEnabled(True)
         self.output_path = str(target)
-        self.output_label.setText(str(target))
+        self.output_controls.set_file(target)
         self.log.add_message(f"完成：{target}（目录条目：{len(entries)}）", target)
         for row, item in enumerate(items):
             self.table.item(row, 2).setText(str(item.page_count))

@@ -2,14 +2,53 @@ from __future__ import annotations
 
 import math
 import re
+import os
 import tempfile
+import uuid
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
 
 class PdfOperationError(RuntimeError):
     """A user-facing PDF operation failure."""
+
+
+class CompressionPreset(str, Enum):
+    """Supported local PDF compression profiles."""
+
+    LOSSLESS = "lossless"
+    LIGHT = "light"
+    BALANCED = "balanced"
+    STRONG = "strong"
+
+
+@dataclass(frozen=True)
+class CompressionEstimate:
+    original_bytes: int
+    estimated_bytes: int
+    estimated_ratio: float
+    confidence: str
+    message: str
+
+
+@dataclass(frozen=True)
+class CompressionResult:
+    input_path: Path
+    output_path: Path
+    original_bytes: int
+    output_bytes: int
+    compression_ratio: float
+    preset: CompressionPreset
+
+
+_COMPRESSION_PROFILES = {
+    CompressionPreset.LOSSLESS: {"dpi_threshold": None, "dpi_target": 0, "quality": 95, "factor": 0.94},
+    CompressionPreset.LIGHT: {"dpi_threshold": 180, "dpi_target": 150, "quality": 82, "factor": 0.72},
+    CompressionPreset.BALANCED: {"dpi_threshold": 150, "dpi_target": 110, "quality": 68, "factor": 0.50},
+    CompressionPreset.STRONG: {"dpi_threshold": 100, "dpi_target": 72, "quality": 48, "factor": 0.31},
+}
 
 
 TITLE_TEMPLATES = {
@@ -691,3 +730,153 @@ def add_pdf_page_numbers(
     with target.open("xb") as handle:
         writer.write(handle)
     return target
+
+def _require_fitz():
+    try:
+        import fitz  # type: ignore[import-not-found]
+    except ImportError as exc:
+        raise PdfOperationError("PDF 压缩需要 PyMuPDF，请使用 documenttools 环境安装依赖。") from exc
+    return fitz
+
+
+def _open_fitz_document(path: Path):
+    fitz = _require_fitz()
+    if not path.is_file() or path.suffix.lower() != ".pdf":
+        raise PdfOperationError(f"不是可读取的 PDF：{path}")
+    try:
+        document = fitz.open(str(path))
+        if document.needs_pass and not document.authenticate(""):
+            document.close()
+            raise PdfOperationError(f"{path.name} 需要打开密码，无法猜测密码。")
+        if document.page_count == 0:
+            document.close()
+            raise PdfOperationError(f"{path.name} 没有页面。")
+        return document
+    except PdfOperationError:
+        raise
+    except Exception as exc:
+        raise PdfOperationError(f"无法读取 {path.name}：{exc}") from exc
+
+
+def _normalise_compression_preset(preset: CompressionPreset | str) -> CompressionPreset:
+    if isinstance(preset, CompressionPreset):
+        return preset
+    try:
+        return CompressionPreset(str(preset))
+    except ValueError as exc:
+        raise PdfOperationError(f"未知的 PDF 压缩档位：{preset}") from exc
+
+
+def _image_summary(document: Any) -> tuple[int, int]:
+    image_xrefs: set[int] = set()
+    image_bytes = 0
+    for page in document:
+        for image in page.get_images(full=True):
+            xref = int(image[0])
+            if xref in image_xrefs:
+                continue
+            image_xrefs.add(xref)
+            try:
+                image_bytes += len(document.extract_image(xref).get("image", b""))
+            except Exception:
+                continue
+    return len(image_xrefs), image_bytes
+
+
+def estimate_pdf_compression(
+    source: str | Path,
+    preset: CompressionPreset | str = CompressionPreset.BALANCED,
+) -> CompressionEstimate:
+    """Estimate a PDF's compressed size without writing an output file."""
+    source_path = Path(source)
+    selected = _normalise_compression_preset(preset)
+    profile = _COMPRESSION_PROFILES[selected]
+    original_bytes = source_path.stat().st_size if source_path.is_file() else 0
+    document = _open_fitz_document(source_path)
+    try:
+        image_count, image_bytes = _image_summary(document)
+        non_image_bytes = max(0, original_bytes - image_bytes)
+        if image_count:
+            estimated = int(non_image_bytes * 0.96 + image_bytes * profile["factor"])
+            confidence = "中" if image_count < 3 else "高"
+            message = f"检测到 {image_count} 个嵌入图片，预估主要基于图片压缩。"
+        else:
+            factor = 0.94 if selected is CompressionPreset.LOSSLESS else 0.98
+            estimated = int(original_bytes * factor)
+            confidence = "低"
+            message = "未检测到可明显压缩的嵌入图片，实际大小可能变化不明显。"
+        estimated = max(1, min(original_bytes if original_bytes else estimated, estimated))
+        ratio = max(0.0, 1 - estimated / original_bytes) if original_bytes else 0.0
+        return CompressionEstimate(original_bytes, estimated, ratio, confidence, message)
+    finally:
+        document.close()
+
+
+def compress_pdf(
+    source: str | Path,
+    output: str | Path | None = None,
+    *,
+    preset: CompressionPreset | str = CompressionPreset.BALANCED,
+) -> CompressionResult:
+    """Compress a PDF locally using the bundled PyMuPDF Python package."""
+    source_path = Path(source)
+    selected = _normalise_compression_preset(preset)
+    target = Path(output) if output else _default_output(source_path, "压缩")
+    if target.resolve() == source_path.resolve():
+        raise PdfOperationError("输出文件不能覆盖输入 PDF。")
+    if target.exists():
+        raise PdfOperationError(f"输出文件已存在：{target}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    profile = _COMPRESSION_PROFILES[selected]
+    original_bytes = source_path.stat().st_size
+    document = _open_fitz_document(source_path)
+    page_count = document.page_count
+    temporary = target.parent / f".{target.stem}.{uuid.uuid4().hex}.tmp.pdf"
+    try:
+        if selected is not CompressionPreset.LOSSLESS:
+            document.rewrite_images(
+                dpi_threshold=profile["dpi_threshold"],
+                dpi_target=profile["dpi_target"],
+                quality=profile["quality"],
+                lossy=True,
+                lossless=True,
+                bitonal=True,
+                color=True,
+                gray=True,
+            )
+        document.save(
+            str(temporary),
+            garbage=4,
+            clean=1,
+            deflate=1,
+            deflate_images=1,
+            deflate_fonts=1,
+            use_objstms=1,
+            compression_effort=1,
+            preserve_metadata=1,
+        )
+    except Exception as exc:
+        raise PdfOperationError(f"PDF 压缩失败：{exc}") from exc
+    finally:
+        document.close()
+    try:
+        verification = _open_fitz_document(temporary)
+        try:
+            if verification.page_count != page_count:
+                raise PdfOperationError("压缩结果页数校验失败。")
+        finally:
+            verification.close()
+        os.replace(temporary, target)
+    except PdfOperationError:
+        if temporary.exists():
+            temporary.unlink()
+        raise
+    except Exception as exc:
+        if temporary.exists():
+            temporary.unlink()
+        raise PdfOperationError(f"无法保存压缩结果：{exc}") from exc
+    output_bytes = target.stat().st_size
+    return CompressionResult(
+        source_path, target, original_bytes, output_bytes,
+        max(0.0, 1 - output_bytes / original_bytes) if original_bytes else 0.0, selected,
+    )

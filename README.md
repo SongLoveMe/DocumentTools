@@ -4,14 +4,16 @@ DocumentTools 是 Windows x64 本地文档处理工具。所有输入、临时�
 
 ## 项目版本
 
-当前项目版本：`2.0.0`。该版本号属于 DocumentTools 项目，不代表任何第三方依赖版本。
+当前项目版本：`2.1.0`。该版本号属于 DocumentTools 项目，不代表任何第三方依赖版本。
 
 ## V2 功能
 
 ### PDF 工作台
 
 - 排列 PDF：合并、拆分、提取指定页、删除指定页、重排序。
-- 编辑 PDF：添加页码、旋转页面。
+- 编辑 PDF：添加页码、旋转页面、压缩 PDF。
+- PDF 压缩：无损、轻度、平衡、强力四档，使用本地 Python 组件处理。
+- 压缩预估：根据页面和嵌入图片信息显示预计大小，最终结果以实际输出为准。
 - 从 PDF 转换：Word、PowerPoint、可识别表格 Excel、逐页 PNG/JPG。
 - 转为 PDF：Word、PowerPoint、Excel 和图片。
 - 页面操作支持后台生成缩略图；只有重排序操作允许拖拽页面。
@@ -25,7 +27,7 @@ DocumentTools 是 Windows x64 本地文档处理工具。所有输入、临时�
 - 加密 PDF 只尝试空密码；需要真实打开密码时明确失败，不猜密码。
 - WPS 兼容指 WPS 创建的标准 `doc/docx`、`ppt/pptx`、`xls/xlsx`；不承诺 `.wps/.dps/.et`。
 - PDF 转 Excel 只提取可识别的数字 PDF 表格，不做 OCR。
-- 当前版本暂不支持 PDF 裁剪、水印和密码破解。
+- 当前版本暂不支持 PDF 裁剪和水印。PDF 打开密码只尝试空密码，不猜测真实密码。
 
 ## 项目结构
 
@@ -39,7 +41,7 @@ DocumentTools/
 │  ├─ conversions.py               # 文件格式转换领域逻辑
 │  ├─ engines.py                   # 内置 LibreOffice 适配器
 │  ├─ paths.py                     # 文件分类和冲突路径
-│  ├─ pdf_tools.py                 # PDF 合并与页面领域逻辑
+│  ├─ pdf_tools.py                 # PDF 合并、压缩与页面领域逻辑
 │  └─ ui/
 │     ├─ tasking.py                # 唯一的 Qt 后台任务封装
 │     ├─ widgets.py                # FileTable、OutputLog 等通用控件

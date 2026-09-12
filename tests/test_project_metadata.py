@@ -9,9 +9,9 @@ def test_release_version_is_consistent() -> None:
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     package = (ROOT / "src" / "documenttools" / "__init__.py").read_text(encoding="utf-8")
     installer = (ROOT / "installer" / "DocumentTools.iss").read_text(encoding="utf-8")
-    assert 'version = "2.0.0"' in pyproject
-    assert '__version__ = "2.0.0"' in package
-    assert '#define MyAppVersion "2.0.0"' in installer
+    assert 'version = "2.1.0"' in pyproject
+    assert '__version__ = "2.1.0"' in package
+    assert '#define MyAppVersion "2.1.0"' in installer
 
 
 def test_maintenance_docs_describe_ui_package() -> None:
@@ -20,7 +20,7 @@ def test_maintenance_docs_describe_ui_package() -> None:
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     assert "ui/tasking.py" in architecture
     assert "ui/widgets.py" in architecture
-    assert "版本 `2.0.0`" in development
+    assert "版本 `2.1.0`" in development
     assert "不要在多个模块复制 `Task`" in agents
 
 

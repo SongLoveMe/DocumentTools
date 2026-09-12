@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import QAbstractItemView, QCheckBox, QFileDialog, QHBoxLayo
 from ..conversions import convert_file_to_pdf, image_to_pdf
 from ..paths import classify_file, unique_path
 from .tasking import Task
-from .widgets import FileTable, OutputLog, button_row
+from .widgets import FileTable, OutputDirectoryControls, OutputLog, button_row
 
 class ConversionTab(QWidget):
     """Convert only Word/PPT/Excel/image inputs to PDF."""
@@ -27,13 +27,12 @@ class ConversionTab(QWidget):
         self.group_images.setChecked(False)
         self.group_images.setVisible(False)
         self.output_dir = Path.home() / "Documents"
-        self.output_label = QLabel(str(self.output_dir))
+        self.output_controls = OutputDirectoryControls(self.output_dir)
+        self.output_controls.directory_changed.connect(self._output_changed)
         self.progress = QProgressBar()
         self.log = OutputLog()
         self.start_button = QPushButton("转为 PDF")
-        self.open_button = QPushButton("打开输出目录")
         self.start_button.clicked.connect(self.start)
-        self.open_button.clicked.connect(self.open_output)
         self._build()
 
     def _build(self) -> None:
@@ -54,17 +53,10 @@ class ConversionTab(QWidget):
         controls.addWidget(down)
         layout.addLayout(controls)
         layout.addWidget(self.group_images)
-        output = QHBoxLayout()
-        output.addWidget(QLabel("输出目录"))
-        output.addWidget(self.output_label, 1)
-        choose = QPushButton("选择输出目录")
-        choose.clicked.connect(self.choose_output)
-        output.addWidget(choose)
-        layout.addLayout(output)
+        layout.addWidget(self.output_controls)
         actions = QHBoxLayout()
-        actions.addWidget(self.start_button)
-        actions.addWidget(self.open_button)
         actions.addStretch()
+        actions.addWidget(self.start_button)
         layout.addLayout(actions)
         layout.addWidget(self.progress)
         layout.addWidget(QLabel("处理日志（双击输出记录可打开文件）"))
@@ -109,11 +101,8 @@ class ConversionTab(QWidget):
         if not visible:
             self.group_images.setChecked(False)
 
-    def choose_output(self) -> None:
-        selected = QFileDialog.getExistingDirectory(self, "选择输出目录", str(self.output_dir))
-        if selected:
-            self.output_dir = Path(selected)
-            self.output_label.setText(str(self.output_dir))
+    def _output_changed(self, value: str) -> None:
+        self.output_dir = Path(value)
 
     def move_selected(self, delta: int) -> None:
         row = self.table.currentRow()

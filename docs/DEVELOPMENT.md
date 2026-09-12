@@ -40,7 +40,7 @@ $env:QT_QPA_PLATFORM = "offscreen"
 
 - `vendor/libreoffice/program/soffice.exe` 存在。
 - `requirements.lock` 与 `THIRD_PARTY_NOTICES.md` 一致。
-- 版本 `2.0.0` 在 `pyproject.toml`、`src/documenttools/__init__.py`、`installer/DocumentTools.iss` 中一致。
+- 版本 `2.1.0` 在 `pyproject.toml`、`src/documenttools/__init__.py`、`installer/DocumentTools.iss` 中一致。
 - 执行 `git diff --check` 无输出。
 - 执行完整 pytest 且全部通过。
 - 构建目录不包含用户文件、测试文件或缓存。
@@ -61,3 +61,12 @@ $env:QT_QPA_PLATFORM = "offscreen"
 - 验证加密 PDF 的空密码/真实密码行为。
 - 验证日志双击打开输出文件和文件不存在提示。
 - 不提交 `build/`、`dist/`、`release/`、`pytest-*`、`.pytest-tmp/`、缓存或本机配置。
+
+## v2.1 PDF 压缩验证
+
+- PDF 压缩只允许使用 `requirements.lock` 中的 Python 依赖，不添加外部 PDF 可执行程序。
+- 验证无损、轻度、平衡、强力四个档位都能生成可重新打开的 PDF。
+- 验证输入文件不被覆盖，输出冲突时使用 `文件名 (1).pdf`。
+- 验证真实打开密码不会被猜测，可查看但禁止编辑的 PDF 按空密码规则处理。
+- 验证预估信息明确标注为参考值，实际压缩结果记录原始大小、输出大小和压缩比例。
+- 图标源文件为 `assets/documenttools.svg`，Windows 打包图标为 `assets/documenttools.ico`。

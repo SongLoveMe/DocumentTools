@@ -10,14 +10,14 @@ from PyQt5.QtWidgets import QApplication, QListWidget, QMainWindow, QSplitter, Q
 from ..engines import EmbeddedOfficeEngine
 from .conversion_tab import ConversionTab
 from .merge_tab import MergeTab
-from .pdf_workbench import FromPdfPanel, NumberingPanel, PageOperationPanel, RotationPanel
+from .pdf_workbench import CompressionPanel, FromPdfPanel, NumberingPanel, PageOperationPanel, RotationPanel
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("DocumentTools")
         self.resize(1180, 820)
-        icon = Path(__file__).parents[2] / "assets" / "documenttools.ico"
+        icon = Path(__file__).parents[3] / "assets" / "documenttools.ico"
         if icon.is_file():
             self.setWindowIcon(QIcon(str(icon)))
         self.pool = QThreadPool.globalInstance()
@@ -58,6 +58,7 @@ class MainWindow(QMainWindow):
         tabs = QTabWidget()
         tabs.addTab(NumberingPanel(self.pool), "添加页码")
         tabs.addTab(RotationPanel(self.pool), "旋转页面")
+        tabs.addTab(CompressionPanel(self.pool), "压缩 PDF")
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.addWidget(tabs)
@@ -88,6 +89,8 @@ def _apply_palette(app: QApplication) -> None:
         "QTabBar::tab{padding:10px 20px;color:#52606d}"
         "QTabBar::tab:selected{color:#1d4ed8;border-bottom:2px solid #2563eb}"
         "QPushButton{min-height:34px;padding:0 14px;border:1px solid #cbd5e1;border-radius:6px;background:#fff}"
+        "QPushButton#primaryAction{background:#2563eb;color:#fff;border-color:#2563eb;font-weight:600}"
+        "QLabel#outputPath{color:#52606d}"
         "QPushButton:hover{border-color:#2563eb;color:#1d4ed8}"
         "QPushButton:disabled{color:#9aa5b1;background:#f1f4f8}"
         "QComboBox,QLineEdit,QTableWidget{border:1px solid #cbd5e1;border-radius:6px;background:#fff;padding:4px}"
@@ -99,6 +102,8 @@ def _apply_palette(app: QApplication) -> None:
 def run() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("DocumentTools")
+    app.setApplicationDisplayName("DocumentTools")
+    app.setWindowIcon(QIcon(str(Path(__file__).parents[3] / "assets" / "documenttools.ico")))
     _apply_palette(app)
     window = MainWindow()
     window.show()

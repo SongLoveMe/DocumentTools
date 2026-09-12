@@ -6,8 +6,8 @@ from typing import Callable
 from PyQt5.QtCore import QUrl, Qt, pyqtSignal
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import (
-    QAbstractItemView, QHBoxLayout, QListWidget, QListWidgetItem, QMessageBox,
-    QPushButton, QTableWidget,
+    QAbstractItemView, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMessageBox,
+    QPushButton, QTableWidget, QFileDialog, QWidget,
 )
 
 
@@ -138,3 +138,91 @@ class OutputLog(QListWidget):
 
 def open_folder(path: str | Path) -> None:
     QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(path))))
+
+
+class OutputDirectoryControls(QWidget):
+    """Shared output-directory row used by every directory-based workspace."""
+
+    directory_changed = pyqtSignal(str)
+
+    def __init__(self, directory: str | Path, parent=None):
+        super().__init__(parent)
+        self.directory = Path(directory)
+        self.path_label = QLabel()
+        self.path_label.setObjectName("outputPath")
+        self.path_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.path_label.setToolTip(str(self.directory))
+        self.choose_button = QPushButton("选择输出目录")
+        self.open_button = QPushButton("打开输出目录")
+        self.choose_button.clicked.connect(self.choose)
+        self.open_button.clicked.connect(self.open)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        layout.addWidget(QLabel("输出目录"))
+        layout.addWidget(self.path_label, 1)
+        layout.addWidget(self.choose_button)
+        layout.addWidget(self.open_button)
+        self.set_directory(self.directory)
+
+    def set_directory(self, directory: str | Path) -> None:
+        self.directory = Path(directory)
+        self.path_label.setText(str(self.directory))
+        self.path_label.setToolTip(str(self.directory))
+
+    def choose(self) -> None:
+        selected = QFileDialog.getExistingDirectory(self, "选择输出目录", str(self.directory))
+        if selected:
+            self.set_directory(selected)
+            self.directory_changed.emit(str(self.directory))
+
+    def open(self) -> None:
+        if not self.directory.exists():
+            QMessageBox.warning(self, "目录不存在", "输出目录不存在：\n" + str(self.directory))
+            return
+        open_folder(self.directory)
+
+
+class OutputFileControls(QWidget):
+    """Shared output-file row for operations producing one named file."""
+
+    file_changed = pyqtSignal(str)
+
+    def __init__(self, file_path: str | Path, parent=None):
+        super().__init__(parent)
+        self.file_path = Path(file_path)
+        self.path_label = QLabel()
+        self.path_label.setObjectName("outputPath")
+        self.path_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.choose_button = QPushButton("选择输出文件")
+        self.open_button = QPushButton("打开输出目录")
+        self.choose_button.clicked.connect(self.choose)
+        self.open_button.clicked.connect(self.open)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        layout.addWidget(QLabel("输出文件"))
+        layout.addWidget(self.path_label, 1)
+        layout.addWidget(self.choose_button)
+        layout.addWidget(self.open_button)
+        self.set_file(self.file_path)
+
+    def set_file(self, file_path: str | Path) -> None:
+        self.file_path = Path(file_path)
+        self.path_label.setText(str(self.file_path))
+        self.path_label.setToolTip(str(self.file_path))
+
+    def choose(self) -> None:
+        selected, _ = QFileDialog.getSaveFileName(self, "选择输出文件", str(self.file_path), "PDF 文件 (*.pdf)")
+        if selected:
+            if not selected.lower().endswith(".pdf"):
+                selected += ".pdf"
+            self.set_file(selected)
+            self.file_changed.emit(str(self.file_path))
+
+    def open(self) -> None:
+        folder = self.file_path.parent
+        if not folder.exists():
+            QMessageBox.warning(self, "目录不存在", "输出目录不存在：\n" + str(folder))
+            return
+        open_folder(folder)

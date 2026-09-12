@@ -1,5 +1,5 @@
 #define MyAppName "DocumentTools"
-#define MyAppVersion "2.0.0"
+#define MyAppVersion "2.1.0"
 #define MyAppPublisher "DocumentTools"
 #define MyAppExeName "DocumentTools.exe"
 
