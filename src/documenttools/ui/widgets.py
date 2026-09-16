@@ -6,8 +6,8 @@ from typing import Callable
 from PyQt5.QtCore import QUrl, Qt, pyqtSignal
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import (
-    QAbstractItemView, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMessageBox,
-    QPushButton, QTableWidget, QFileDialog, QWidget,
+    QAbstractItemView, QFileDialog, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
+    QMessageBox, QPushButton, QTableWidget, QVBoxLayout, QWidget,
 )
 
 
@@ -84,13 +84,20 @@ class FileTable(QTableWidget):
         self.order_changed.emit()
 
 
-def button_row(table: FileTable, chooser: Callable[[], None]) -> QHBoxLayout:
+def button_row(
+    table: FileTable,
+    chooser: Callable[[], None],
+    *,
+    add_text: str = "添加文件",
+    remove_text: str = "移除选中",
+    clear_text: str = "清空列表",
+) -> QHBoxLayout:
     row = QHBoxLayout()
-    add = QPushButton("添加文件")
+    add = QPushButton(add_text)
     add.clicked.connect(chooser)
-    remove = QPushButton("移除选中")
+    remove = QPushButton(remove_text)
     remove.clicked.connect(table.remove_selected)
-    clear = QPushButton("清空列表")
+    clear = QPushButton(clear_text)
     clear.clicked.connect(table.clearContents)
     clear.clicked.connect(lambda: table.setRowCount(0))
     row.addWidget(add)
@@ -117,7 +124,7 @@ class OutputLog(QListWidget):
         item = QListWidgetItem(message)
         if path is not None:
             item.setData(Qt.UserRole, str(path))
-            item.setToolTip("Double-click to open: " + str(path))
+            item.setToolTip("双击打开：" + str(path))
         self.addItem(item)
         self.scrollToBottom()
 
@@ -130,14 +137,39 @@ class OutputLog(QListWidget):
             return
         path = Path(str(raw))
         if not path.exists():
-            QMessageBox.warning(self, "File not found", "The output no longer exists:\n" + str(path))
+            QMessageBox.warning(self, "文件不存在", "输出文件已不存在：\n" + str(path))
             return
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
         self.output_double_clicked.emit(str(path))
 
 
-def open_folder(path: str | Path) -> None:
-    QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(path))))
+class LogSection(QWidget):
+    """Shared log heading, clear action and clickable output list."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        heading = QHBoxLayout()
+        label = QLabel("处理日志（双击输出记录可打开文件）")
+        self.clear_button = QPushButton("清除日志")
+        self.clear_button.clicked.connect(self.clear)
+        heading.addWidget(label)
+        heading.addStretch()
+        heading.addWidget(self.clear_button)
+        layout.addLayout(heading)
+        self.log = OutputLog()
+        layout.addWidget(self.log)
+
+    def add_message(self, message: str, path: str | Path | None = None) -> None:
+        self.log.add_message(message, path)
+
+    def clear(self) -> None:
+        self.log.clear_log()
+
+    def clear_log(self) -> None:
+        self.clear()
 
 
 class OutputDirectoryControls(QWidget):
@@ -226,3 +258,7 @@ class OutputFileControls(QWidget):
             QMessageBox.warning(self, "目录不存在", "输出目录不存在：\n" + str(folder))
             return
         open_folder(folder)
+
+
+def open_folder(path: str | Path) -> None:
+    QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(path))))

@@ -1,5 +1,5 @@
 #define MyAppName "DocumentTools"
-#define MyAppVersion "2.1.0"
+#define MyAppVersion "2.2.0"
 #define MyAppPublisher "DocumentTools"
 #define MyAppExeName "DocumentTools.exe"
 
@@ -20,7 +20,6 @@ SetupIconFile=..\assets\documenttools.ico
 
 [Files]
 Source: "..\dist\DocumentTools\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
-Source: "..\vendor\libreoffice\*"; DestDir: "{app}\runtime\libreoffice"; Flags: recursesubdirs ignoreversion skipifsourcedoesntexist
 Source: "..\THIRD_PARTY_NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\assets\documenttools.ico"; DestDir: "{app}"; Flags: ignoreversion
 

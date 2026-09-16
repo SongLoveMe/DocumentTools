@@ -7,10 +7,11 @@ from PyQt5.QtCore import QThreadPool
 from PyQt5.QtGui import QColor, QIcon, QPalette
 from PyQt5.QtWidgets import QApplication, QListWidget, QMainWindow, QSplitter, QStackedWidget, QTabWidget, QVBoxLayout, QWidget
 
-from ..engines import EmbeddedOfficeEngine
+from ..engines import available_engine_labels, detect_local_engines
 from .conversion_tab import ConversionTab
 from .merge_tab import MergeTab
 from .pdf_workbench import CompressionPanel, FromPdfPanel, NumberingPanel, PageOperationPanel, RotationPanel
+from .settings_tab import SettingsTab
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -32,6 +33,7 @@ class MainWindow(QMainWindow):
             ("转为 PDF", ConversionTab(self.pool)),
             ("从 PDF 转换", FromPdfPanel(self.pool)),
             ("编辑 PDF", self._editing_page()),
+            ("设置", SettingsTab()),
         ]
         for label, widget in categories:
             self.navigation.addItem(label)
@@ -66,8 +68,11 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _engine_message() -> str:
-        status = EmbeddedOfficeEngine.status()
-        return "内置转换运行时：" + ("可用" if status.available else "未随当前开发目录提供")
+        """Describe the detected local conversion engines in the status bar."""
+        labels = available_engine_labels(detect_local_engines())
+        if labels:
+            return "转换引擎：" + "、".join(labels)
+        return "转换引擎：未检测到本机 Microsoft Office 或 WPS"
 
 def _apply_palette(app: QApplication) -> None:
     palette = QPalette()

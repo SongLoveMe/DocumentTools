@@ -44,6 +44,9 @@ tmp/
 temp/
 out/
 
+# Legacy embedded runtime directories, removed in 2.2.0.
+vendor/
+
 # Pytest temporary work directories
 pytest-*/
 .pytest-tmp/

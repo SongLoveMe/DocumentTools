@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, Q
 from ..paths import unique_path
 from ..pdf_tools import TITLE_TEMPLATES, MergeItem, PageSizeConfig, format_directory_title, merge_pdfs
 from .tasking import Task
-from .widgets import FileTable, OutputFileControls, OutputLog
+from .widgets import FileTable, LogSection, OutputFileControls
 
 class MergeTab(QWidget):
     def __init__(self, pool: QThreadPool):
@@ -47,8 +47,10 @@ class MergeTab(QWidget):
         self.custom_height.setSuffix(" pt")
         self.cover_label = QLabel("未设置封面")
         self.progress = QProgressBar()
-        self.log = OutputLog()
+        self.log_section = LogSection()
+        self.log = self.log_section.log
         self.start_button = QPushButton("合并 PDF")
+        self.start_button.setObjectName("primaryAction")
         self.start_button.clicked.connect(self.start)
         self._build()
 
@@ -96,9 +98,8 @@ class MergeTab(QWidget):
         actions.addStretch()
         actions.addWidget(self.start_button)
         layout.addLayout(actions)
-        layout.addWidget(QLabel("处理日志（双击输出记录可打开文件）"))
         layout.addWidget(self.progress)
-        layout.addWidget(self.log)
+        layout.addWidget(self.log_section)
 
     def choose_files(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(self, "选择要合并的 PDF", filter="PDF 文件 (*.pdf)")

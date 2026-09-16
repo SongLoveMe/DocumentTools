@@ -9,6 +9,15 @@ def test_classify_supported_files() -> None:
     assert classify_file("scan.TIFF") == "image"
     assert classify_file("merged.pdf") == "pdf"
     assert classify_file("archive.zip") == "unsupported"
+    # Legacy binary Office formats are convertible because a locally installed
+    # Office or WPS engine can open them directly.
+    assert classify_file("legacy.doc") == "office"
+    assert classify_file("legacy.ppt") == "office"
+    assert classify_file("legacy.xls") == "office"
+    # WPS proprietary formats are still out of scope.
+    assert classify_file("legacy.wps") == "unsupported"
+    assert classify_file("legacy.dps") == "unsupported"
+    assert classify_file("legacy.et") == "unsupported"
 
 
 def test_unique_path_never_overwrites(tmp_path: Path) -> None:
@@ -17,4 +26,3 @@ def test_unique_path_never_overwrites(tmp_path: Path) -> None:
     first.touch()
     second.touch()
     assert unique_path(tmp_path, "result", ".pdf") == tmp_path / "result (2).pdf"
-

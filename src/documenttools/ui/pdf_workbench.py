@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
 
 from ..conversions import convert_pdf_to_excel, convert_pdf_to_images, convert_pdf_to_ppt, convert_pdf_to_word
 from .tasking import Task
-from .widgets import OutputDirectoryControls, OutputLog, open_folder
+from .widgets import LogSection, OutputDirectoryControls, open_folder
 from ..paths import unique_path
 from ..pdf_tools import (
     PAGE_NUMBER_FORMATS, PAGE_NUMBER_POSITIONS, PageNumberConfig, CompressionPreset,
@@ -228,7 +228,9 @@ class PageOperationPanel(QWidget):
         self.output_controls = OutputDirectoryControls(self.output_dir)
         self.output_controls.directory_changed.connect(self._output_changed)
         self.run_button = QPushButton("开始处理")
-        self.log = OutputLog()
+        self.run_button.setObjectName("primaryAction")
+        self.log_section = LogSection()
+        self.log = self.log_section.log
 
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("排列 PDF：选择操作后，只显示当前操作需要的参数。"))
@@ -243,8 +245,7 @@ class PageOperationPanel(QWidget):
         actions.addStretch()
         actions.addWidget(self.run_button)
         layout.addLayout(actions)
-        layout.addWidget(QLabel("处理日志（双击输出记录可打开文件）"))
-        layout.addWidget(self.log)
+        layout.addWidget(self.log_section)
 
         self.operation.currentIndexChanged.connect(self.refresh)
         self.mode.currentIndexChanged.connect(self.refresh)
@@ -327,7 +328,9 @@ class NumberingPanel(QWidget):
         self.output_controls = OutputDirectoryControls(self.output_dir)
         self.output_controls.directory_changed.connect(self._output_changed)
         self.run_button = QPushButton("添加页码")
-        self.log = OutputLog()
+        self.run_button.setObjectName("primaryAction")
+        self.log_section = LogSection()
+        self.log = self.log_section.log
         form = QFormLayout()
         form.addRow("页面范围", self.pages)
         form.addRow("位置", self.position)
@@ -344,7 +347,7 @@ class NumberingPanel(QWidget):
         actions.addStretch()
         actions.addWidget(self.run_button)
         layout.addLayout(actions)
-        layout.addWidget(self.log)
+        layout.addWidget(self.log_section)
         self.run_button.clicked.connect(self.start)
 
     def start(self) -> None:
@@ -387,7 +390,9 @@ class RotationPanel(QWidget):
         self.output_controls = OutputDirectoryControls(self.output_dir)
         self.output_controls.directory_changed.connect(self._output_changed)
         self.run_button = QPushButton("旋转页面")
-        self.log = OutputLog()
+        self.run_button.setObjectName("primaryAction")
+        self.log_section = LogSection()
+        self.log = self.log_section.log
         form = QFormLayout()
         form.addRow("页面范围", self.pages)
         form.addRow("方向", self.direction)
@@ -400,7 +405,7 @@ class RotationPanel(QWidget):
         actions.addStretch()
         actions.addWidget(self.run_button)
         layout.addLayout(actions)
-        layout.addWidget(self.log)
+        layout.addWidget(self.log_section)
         self.run_button.clicked.connect(self.start)
 
     def start(self) -> None:
@@ -451,7 +456,9 @@ class FromPdfPanel(QWidget):
         self.output_controls = OutputDirectoryControls(self.output_dir)
         self.output_controls.directory_changed.connect(self._output_changed)
         self.run_button = QPushButton("开始转换")
-        self.log = OutputLog()
+        self.run_button.setObjectName("primaryAction")
+        self.log_section = LogSection()
+        self.log = self.log_section.log
         form = QFormLayout()
         form.addRow("目标格式", self.mode)
         form.addRow(self.dpi_row)
@@ -469,7 +476,7 @@ class FromPdfPanel(QWidget):
         actions.addStretch()
         actions.addWidget(self.run_button)
         layout.addLayout(actions)
-        layout.addWidget(self.log)
+        layout.addWidget(self.log_section)
         self.mode.currentIndexChanged.connect(lambda: self.dpi_row.setVisible(self.mode.currentData() in {"png", "jpg"}))
         self.run_button.clicked.connect(self.start)
         self.dpi_row.setVisible(False)
@@ -540,7 +547,9 @@ class CompressionPanel(QWidget):
         self.output_controls.directory_changed.connect(self._output_changed)
         self.choose_button = QPushButton("选择 PDF")
         self.run_button = QPushButton("压缩 PDF")
-        self.log = OutputLog()
+        self.run_button.setObjectName("primaryAction")
+        self.log_section = LogSection()
+        self.log = self.log_section.log
         self.choose_button.clicked.connect(self.choose)
         self.preset.currentIndexChanged.connect(self.refresh_estimate)
         self.run_button.clicked.connect(self.start)
@@ -551,7 +560,7 @@ class CompressionPanel(QWidget):
         title = QLabel("压缩 PDF")
         title.setObjectName("sectionTitle")
         layout.addWidget(title)
-        layout.addWidget(QLabel("使用本地 Python 组件压缩 PDF，不调用系统中的外部 PDF 程序。"))
+        layout.addWidget(QLabel("使用本地 Python 组件压缩 PDF，不调用任何外部程序。"))
         source_row = QHBoxLayout()
         source_row.addWidget(self.choose_button)
         source_row.addWidget(self.source_label, 1)
@@ -566,8 +575,7 @@ class CompressionPanel(QWidget):
         actions.addStretch()
         actions.addWidget(self.run_button)
         layout.addLayout(actions)
-        layout.addWidget(QLabel("处理日志（双击输出记录可打开文件）"))
-        layout.addWidget(self.log)
+        layout.addWidget(self.log_section)
 
     def choose(self) -> None:
         from PyQt5.QtWidgets import QFileDialog

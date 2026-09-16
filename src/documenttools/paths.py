@@ -4,6 +4,8 @@ from pathlib import Path
 
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}
+# Legacy binary formats are supported because a locally installed Office or WPS
+# engine can open them directly.
 OFFICE_EXTENSIONS = {".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx"}
 PDF_EXTENSIONS = {".pdf"}
 
@@ -28,4 +30,3 @@ def unique_path(folder: str | Path, stem: str, suffix: str) -> Path:
         candidate = directory / f"{stem} ({sequence}){suffix}"
         sequence += 1
     return candidate
-

@@ -3,8 +3,25 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from .engines import ConversionEngineError, convert_with_available_engine
+from .engines import (
+    AppKind,
+    ConversionEngineError,
+    EngineKind,
+    LocalEngineInfo,
+    app_kind_for_path,
+    convert_with_local_engine,
+    engine_for_app,
+)
 from .paths import classify_file, unique_path
+
+# Guidance shown when no local Office/WPS engine is available.  The user is
+# intentionally pointed at online services instead of a built-in fallback:
+# DocumentTools never ships a renderer of its own.
+ONLINE_CONVERSION_SERVICES = (
+    ("Smallpdf", "https://smallpdf.com/cn"),
+    ("iLovePDF", "https://www.ilovepdf.com/zh-cn"),
+    ("PDF24 Tools", "https://tools.pdf24.org/zh/all-tools"),
+)
 
 
 class ConversionError(RuntimeError):
@@ -37,7 +54,22 @@ def image_to_pdf(sources: list[str | Path], output: str | Path) -> None:
             image.close()
 
 
-def convert_file_to_pdf(source: str | Path, output_directory: str | Path, output_stem: str | None = None) -> tuple[Path, str]:
+def convert_file_to_pdf(
+    source: str | Path,
+    output_directory: str | Path,
+    output_stem: str | None = None,
+    *,
+    engines: list[LocalEngineInfo] | tuple[LocalEngineInfo, ...] | None = None,
+    engine_kind: EngineKind | None = None,
+    timeout_seconds: int = 120,
+) -> tuple[Path, str]:
+    """Convert a single file to PDF and report the component that did it.
+
+    Images are handled by Pillow.  Office documents require a locally installed
+    Microsoft Office or WPS engine, which is driven through COM automation;
+    when none is available :class:`ConversionError` is raised so the UI can
+    offer online conversion instead.
+    """
     source_path = Path(source)
     output = unique_path(output_directory, output_stem or source_path.stem, ".pdf")
     file_kind = classify_file(source_path)
@@ -45,30 +77,116 @@ def convert_file_to_pdf(source: str | Path, output_directory: str | Path, output
         image_to_pdf([source_path], output)
         return output, "Pillow"
     if file_kind == "office":
+        return _convert_office(
+            source_path, output, engines, engine_kind, timeout_seconds
+        )
+    raise ConversionError(f"不支持的输入格式：{source_path.name}")
+
+
+def _convert_office(
+    source_path: Path,
+    output: Path,
+    engines: list[LocalEngineInfo] | tuple[LocalEngineInfo, ...] | None,
+    engine_kind: EngineKind | None,
+    timeout_seconds: int,
+) -> tuple[Path, str]:
+    from .engines import detect_local_engines
+
+    app_kind: AppKind | None = app_kind_for_path(source_path)
+    if app_kind is None:
+        raise ConversionError(f"不支持的 Office 格式：{source_path.suffix}")
+
+    detected = tuple(engines) if engines is not None else detect_local_engines()
+    if not detected:
+        raise ConversionError("未检测到本机 Microsoft Office 或 WPS，无法转换该文件。")
+
+    candidates: list[LocalEngineInfo] = []
+    if engine_kind is not None:
+        # An explicitly chosen engine is never silently swapped for the other.
+        chosen = engine_for_app(detected, app_kind, preferred=engine_kind)
+        if chosen is not None and chosen.kind is engine_kind:
+            candidates.append(chosen)
+    else:
+        for kind in (EngineKind.OFFICE, EngineKind.WPS):
+            candidate = engine_for_app(detected, app_kind, preferred=kind)
+            if candidate is not None and candidate not in candidates:
+                candidates.append(candidate)
+
+    if not candidates:
+        raise ConversionError(
+            f"未检测到可转换 {source_path.suffix} 的 Microsoft Office 或 WPS 组件。"
+        )
+
+    failures: list[str] = []
+    for candidate in candidates:
+        binding = candidate.binding_for(app_kind)
         try:
-            engine = convert_with_available_engine(source_path, output)
+            convert_with_local_engine(
+                source_path,
+                output,
+                engine_kind=candidate.kind,
+                app_kind=app_kind,
+                prog_id=binding.prog_id if binding else None,
+                timeout_seconds=timeout_seconds,
+            )
         except ConversionEngineError as exc:
-            raise ConversionError(str(exc)) from exc
-        return output, engine
-    raise ConversionError(f"Unsupported input format: {source_path.name}")
+            failures.append(f"{candidate.label()}：{exc}")
+            continue
+        return output, f"{candidate.display_name} {candidate.version}".strip()
+
+    if output.exists():
+        output.unlink()
+    raise ConversionError("；".join(failures))
 
 
-def convert_pdf_to_word(source: str | Path, output_directory: str | Path, output_stem: str | None = None) -> Path:
+def convert_pdf_to_word(
+    source: str | Path, output_directory: str | Path, output_stem: str | None = None
+) -> Path:
+    """Rebuild a simplified Word document from extracted PDF text and images.
+
+    This is intentionally a reconstruction rather than a faithful conversion:
+    PDF stores positioned glyphs, not editable structure, so paragraphs, tables
+    and columns cannot be recovered reliably.  Output keeps the readable text
+    and embedded images so the result stays editable in Word.
+    """
     try:
-        from pdf2docx import Converter  # type: ignore[import-not-found]
+        import fitz  # type: ignore[import-not-found]
+        from docx import Document  # type: ignore[import-not-found]
+        from docx.shared import Inches  # type: ignore[import-not-found]
     except ImportError as exc:
-        raise ConversionError("pdf2docx is not installed. Run pip install -r requirements.lock.") from exc
+        raise ConversionError("PDF 转 Word 所需的本地依赖未安装，请安装 requirements.lock。") from exc
     source_path = Path(source)
     if classify_file(source_path) != "pdf":
-        raise ConversionError("PDF to Word accepts only PDF files.")
+        raise ConversionError("PDF 转 Word 只接受 PDF 文件。")
     output = unique_path(output_directory, output_stem or source_path.stem, ".docx")
-    converter = Converter(str(source_path))
+
+    document = fitz.open(source_path)
     try:
-        converter.convert(str(output))
-    except Exception as exc:
-        raise ConversionError(f"Could not convert {source_path.name} to Word: {exc}") from exc
+        if document.needs_pass and not document.authenticate(""):
+            raise ConversionError(f"{source_path.name} 需要打开密码，无法猜测密码。")
+        if document.page_count == 0:
+            raise ConversionError(f"{source_path.name} 没有页面。")
+
+        word = Document()
+        for page_index, page in enumerate(document, start=1):
+            if page_index > 1:
+                word.add_page_break()
+            text = page.get_text("text").strip()
+            if text:
+                for line in text.splitlines():
+                    word.add_paragraph(line)
+            for image in page.get_images(full=True):
+                try:
+                    extracted = document.extract_image(image[0])
+                    word.add_picture(io.BytesIO(extracted["image"]), width=Inches(5.5))
+                except Exception:
+                    continue
+        try:
+            word.save(str(output))
+        except Exception as exc:
+            raise ConversionError(f"无法写入 Word 文件：{exc}") from exc
     finally:
-        converter.close()
+        document.close()
     return output
 
 
